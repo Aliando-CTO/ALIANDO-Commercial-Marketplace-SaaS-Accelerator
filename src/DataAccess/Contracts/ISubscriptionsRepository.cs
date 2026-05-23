@@ -64,4 +64,36 @@ public interface ISubscriptionsRepository : IDisposable, IBaseRepository<Subscri
     /// </summary>
     /// <param name="subscriptionParametersOutput">The subscription parameters output.</param>
     void AddSubscriptionParameters(SubscriptionParametersOutput subscriptionParametersOutput);
+
+    /// <summary>
+    /// Saves the subscription without persisting. Caller must commit via ISaasKitUnitOfWork.
+    /// </summary>
+    /// <param name="subscriptionDetails">The subscription details.</param>
+    /// <returns>Subscription Id (0 for newly added rows until SaveChanges runs).</returns>
+    int SaveDeferred(Subscriptions subscriptionDetails);
+
+    /// <summary>
+    /// Updates subscription status without persisting. Caller must commit via ISaasKitUnitOfWork.
+    /// </summary>
+    void UpdateStatusForSubscriptionDeferred(Guid subscriptionId, string subscriptionStatus, bool isActive);
+
+    /// <summary>
+    /// Updates subscription plan without persisting. Caller must commit via ISaasKitUnitOfWork.
+    /// </summary>
+    void UpdatePlanForSubscriptionDeferred(Guid subscriptionId, string planId);
+
+    /// <summary>
+    /// Updates subscription quantity without persisting. Caller must commit via ISaasKitUnitOfWork.
+    /// </summary>
+    void UpdateQuantityForSubscriptionDeferred(Guid subscriptionId, int quantity);
+
+    /// <summary>
+    /// Adds subscription parameters without persisting. Caller must commit via ISaasKitUnitOfWork.
+    /// </summary>
+    void AddSubscriptionParametersDeferred(SubscriptionParametersOutput subscriptionParametersOutput);
+
+    /// <summary>
+    /// Removes a subscription without persisting. Caller must commit via ISaasKitUnitOfWork.
+    /// </summary>
+    void RemoveDeferred(Subscriptions entity);
 }

@@ -225,6 +225,92 @@ public class SubscriptionsRepository : ISubscriptionsRepository
         this.context.SaveChanges();
     }
 
+    /// <inheritdoc />
+    public int SaveDeferred(Subscriptions subscriptionDetails)
+    {
+        var existing = this.context.Subscriptions
+            .FirstOrDefault(s => s.AmpsubscriptionId == subscriptionDetails.AmpsubscriptionId);
+        if (existing != null)
+        {
+            existing.SubscriptionStatus = subscriptionDetails.SubscriptionStatus;
+            existing.AmpplanId = subscriptionDetails.AmpplanId;
+            existing.Ampquantity = subscriptionDetails.Ampquantity;
+            existing.AmpOfferId = subscriptionDetails.AmpOfferId;
+            existing.Term = subscriptionDetails.Term;
+            existing.StartDate = subscriptionDetails.StartDate;
+            existing.EndDate = subscriptionDetails.EndDate;
+            this.context.Subscriptions.Update(existing);
+            return existing.Id;
+        }
+
+        this.context.Subscriptions.Add(subscriptionDetails);
+        return subscriptionDetails.Id;
+    }
+
+    /// <inheritdoc />
+    public void UpdateStatusForSubscriptionDeferred(Guid subscriptionId, string subscriptionStatus, bool isActive)
+    {
+        var existing = this.context.Subscriptions
+            .FirstOrDefault(s => s.AmpsubscriptionId == subscriptionId);
+        if (existing is null) return;
+
+        existing.IsActive = isActive;
+        existing.SubscriptionStatus = subscriptionStatus;
+        this.context.Subscriptions.Update(existing);
+    }
+
+    /// <inheritdoc />
+    public void UpdatePlanForSubscriptionDeferred(Guid subscriptionId, string planId)
+    {
+        var existing = this.context.Subscriptions
+            .FirstOrDefault(s => s.AmpsubscriptionId == subscriptionId);
+        if (existing is null) return;
+
+        existing.AmpplanId = planId;
+        this.context.Subscriptions.Update(existing);
+    }
+
+    /// <inheritdoc />
+    public void UpdateQuantityForSubscriptionDeferred(Guid subscriptionId, int quantity)
+    {
+        var existing = this.context.Subscriptions
+            .FirstOrDefault(s => s.AmpsubscriptionId == subscriptionId);
+        if (existing is null) return;
+
+        existing.Ampquantity = quantity;
+        this.context.Subscriptions.Update(existing);
+    }
+
+    /// <inheritdoc />
+    public void AddSubscriptionParametersDeferred(SubscriptionParametersOutput subscriptionParametersOutput)
+    {
+        var existing = this.context.SubscriptionAttributeValues
+            .FirstOrDefault(s => s.Id == subscriptionParametersOutput.Id);
+        if (existing != null)
+        {
+            existing.OfferId = subscriptionParametersOutput.OfferId;
+            this.context.SubscriptionAttributeValues.Update(existing);
+            return;
+        }
+
+        this.context.SubscriptionAttributeValues.Add(new SubscriptionAttributeValues
+        {
+            OfferId = subscriptionParametersOutput.OfferId,
+            PlanAttributeId = subscriptionParametersOutput.PlanAttributeId,
+            Value = subscriptionParametersOutput.Value,
+            SubscriptionId = subscriptionParametersOutput.SubscriptionId,
+            CreateDate = subscriptionParametersOutput.CreateDate,
+            UserId = subscriptionParametersOutput.UserId,
+            PlanId = subscriptionParametersOutput.PlanId,
+        });
+    }
+
+    /// <inheritdoc />
+    public void RemoveDeferred(Subscriptions entity)
+    {
+        this.context.Subscriptions.Remove(entity);
+    }
+
     /// <summary>
     /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
     /// </summary>

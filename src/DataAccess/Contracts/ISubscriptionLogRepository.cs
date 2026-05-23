@@ -25,4 +25,10 @@ public interface ISubscriptionLogRepository : IBaseRepository<SubscriptionAuditL
     /// <param name="errorDescription">The error description.</param>
     /// <param name="subscriptionStatus">The subscription status.</param>
     void LogStatusDuringProvisioning(Guid subscriptionID, string errorDescription, string subscriptionStatus);
+
+    /// <summary>
+    /// Stages an audit log entry without committing. Caller must commit via ISaasKitUnitOfWork.
+    /// </summary>
+    /// <param name="subscriptionLogs">The subscription logs.</param>
+    void SaveDeferred(SubscriptionAuditLogs subscriptionLogs);
 }

@@ -43,4 +43,11 @@ public interface IOffersRepository : IDisposable
     /// <param name="id">The identifier.</param>
     /// <returns>Offer for the given identifier ( internal id ).</returns>
     Offers GetOfferByInternalId(int id);
+
+    /// <summary>
+    /// Stages an add/update for an offer without committing. Caller must commit via ISaasKitUnitOfWork.
+    /// </summary>
+    /// <param name="offers">The offer to be added or updated.</param>
+    /// <returns>Offer Guid (default for new rows until SaveChanges runs).</returns>
+    Guid AddDeferred(Offers offers);
 }

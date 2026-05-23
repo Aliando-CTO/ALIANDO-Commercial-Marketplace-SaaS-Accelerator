@@ -123,6 +123,8 @@ public class Startup
         // Add the assembly version
         services.AddSingleton<IAppVersionService>(new AppVersionService(Assembly.GetExecutingAssembly()?.GetName()?.Version));
 
+        services.AddHttpClient();
+
         services
             .AddDbContext<SaasKitContext>(options => options.UseSqlServer(this.Configuration.GetConnectionString("DefaultConnection")));
         services.AddScoped<ISaasKitUnitOfWork>(sp => sp.GetRequiredService<SaasKitContext>());

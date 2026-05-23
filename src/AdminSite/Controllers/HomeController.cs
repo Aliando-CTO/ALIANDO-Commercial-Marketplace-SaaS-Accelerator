@@ -98,6 +98,8 @@ public class HomeController : BaseController
 
     private readonly SaaSApiClientConfiguration saaSApiClientConfiguration;
 
+    private readonly ISaasKitUnitOfWork unitOfWork;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="HomeController" /> class.
     /// </summary>
@@ -145,6 +147,7 @@ public class HomeController : BaseController
         PendingFulfillmentStatusHandler pendingFulfillmentStatusHandlers,
         NotificationStatusHandler notificationStatusHandlers,
         UnsubscribeStatusHandler unsubscribeStatusHandlers,
+        ISaasKitUnitOfWork unitOfWork,
         SaaSClientLogger<HomeController> logger) : base(applicationConfigRepository, appVersionService)
     {
         this.billingApiService = billingApiService;
@@ -169,6 +172,7 @@ public class HomeController : BaseController
         this.pendingFulfillmentStatusHandlers = pendingFulfillmentStatusHandlers;
         this.notificationStatusHandlers = notificationStatusHandlers;
         this.unsubscribeStatusHandlers = unsubscribeStatusHandlers;
+        this.unitOfWork = unitOfWork;
     }
 
     /// <summary>
@@ -839,14 +843,15 @@ public class HomeController : BaseController
             var subscriptions = await this.fulfillApiService.GetAllSubscriptionAsync().ConfigureAwait(false);
             foreach (SubscriptionResult subscription in subscriptions)
             {
-                var customerUserId = 0;
+                Users customerUserEntity = null;
                 var currentSubscription = this.subscriptionService.GetSubscriptionsBySubscriptionId(subscription.Id);
+                bool isNewSubscription = currentSubscription.Name == null;
 
                 // Step 2: Check if they Exist in DB - Create if dont exist
-                if (currentSubscription.Name == null)
+                if (isNewSubscription)
                 {
-                    // Step 3: Add/Update the Offer
-                    Guid OfferId = this.offersRepository.Add(new Offers()
+                    // Step 3: Stage the Offer (committed at end of iteration)
+                    Guid OfferId = this.offersRepository.AddDeferred(new Offers()
                     {
                         OfferId = subscription.OfferId,
                         OfferName = subscription.OfferId,
@@ -855,7 +860,7 @@ public class HomeController : BaseController
                         OfferGuid = Guid.NewGuid(),
                     });
 
-                    // Step 4: Add/Update the Plans. For Unsubscribed Only Add current plan from subscription information
+                    // Step 4: Stage the Plans. For Unsubscribed Only Add current plan from subscription information
                     if (subscription.SaasSubscriptionStatus == SubscriptionStatusEnum.Unsubscribed)
                     {
                         PlanDetailResultExtension planDetails = new PlanDetailResultExtension
@@ -867,7 +872,7 @@ public class HomeController : BaseController
                             PlanGUID = Guid.NewGuid(),
                             IsPerUserPlan = subscription.Quantity > 0,
                         };
-                        this.subscriptionService.AddPlanDetailsForSubscription(planDetails);
+                        this.subscriptionService.AddPlanDetailsForSubscriptionDeferred(planDetails);
                     }
                     else
                     {
@@ -877,20 +882,22 @@ public class HomeController : BaseController
                             x.OfferId = OfferId;
                             x.PlanGUID = Guid.NewGuid();
                         });
-                        this.subscriptionService.AddUpdateAllPlanDetailsForSubscription(subscriptionPlanDetail);
+                        this.subscriptionService.AddUpdateAllPlanDetailsForSubscriptionDeferred(subscriptionPlanDetail);
                     }
 
-                    // Step 5: Add/Update the current user from Subscription information
-                    customerUserId = this.userService.AddUser(new PartnerDetailViewModel { FullName = subscription.Beneficiary.EmailId, EmailAddress = subscription.Beneficiary.EmailId });
+                    // Step 5: Stage the beneficiary user. EF resolves the Subscriptions.UserId FK
+                    // at commit time via the navigation property set inside the deferred subscription save.
+                    customerUserEntity = this.userService.AddUserDeferred(new PartnerDetailViewModel { FullName = subscription.Beneficiary.EmailId, EmailAddress = subscription.Beneficiary.EmailId });
                 }
 
-                // Step 6: Add Subscription
-                var subscriptionId = this.subscriptionService.AddOrUpdatePartnerSubscriptions(subscription, customerUserId);
+                // Step 6: Add Subscription (deferred — committed once at end of iteration)
+                var subscriptionId = this.subscriptionService.AddOrUpdatePartnerSubscriptionsDeferred(subscription, customerUserEntity);
 
-                // Step 7: Add Subscription Audit
-                if (currentSubscription != null && subscription.SaasSubscriptionStatus.ToString() != currentSubscription.SubscriptionStatus.ToString())
+                // Step 7: Add Subscription Audit (only for existing subscriptions —
+                // brand-new ones don't have "changes" to audit, just initial values).
+                if (!isNewSubscription && subscription.SaasSubscriptionStatus.ToString() != currentSubscription.SubscriptionStatus.ToString())
                 {
-                    this.subscriptionLogRepository.Save(new SubscriptionAuditLogs()
+                    this.subscriptionLogRepository.SaveDeferred(new SubscriptionAuditLogs()
                     {
                         Attribute = $"{Convert.ToString(SubscriptionLogAttributes.Status)}-Refresh",
                         SubscriptionId = subscriptionId,
@@ -900,9 +907,9 @@ public class HomeController : BaseController
                         CreateDate = DateTime.Now
                     });
                 }
-                if (currentSubscription != null && subscription.PlanId != currentSubscription.PlanId)
+                if (!isNewSubscription && subscription.PlanId != currentSubscription.PlanId)
                 {
-                    this.subscriptionLogRepository.Save(new SubscriptionAuditLogs()
+                    this.subscriptionLogRepository.SaveDeferred(new SubscriptionAuditLogs()
                     {
                         Attribute = $"{Convert.ToString(SubscriptionLogAttributes.Plan)}-Refresh",
                         SubscriptionId = subscriptionId,
@@ -912,9 +919,9 @@ public class HomeController : BaseController
                         CreateDate = DateTime.Now
                     });
                 }
-                if (currentSubscription != null && subscription.Quantity != currentSubscription.Quantity)
+                if (!isNewSubscription && subscription.Quantity != currentSubscription.Quantity)
                 {
-                    this.subscriptionLogRepository.Save(new SubscriptionAuditLogs()
+                    this.subscriptionLogRepository.SaveDeferred(new SubscriptionAuditLogs()
                     {
                         Attribute = $"{Convert.ToString(SubscriptionLogAttributes.Quantity)}-Refresh",
                         SubscriptionId = subscriptionId,
@@ -925,6 +932,9 @@ public class HomeController : BaseController
                     });
                 }
 
+                // Single commit per iteration. EF resolves Subscriptions.UserId and
+                // SubscriptionAuditLogs.SubscriptionId FKs from the staged entities.
+                await this.unitOfWork.SaveChangesAsync().ConfigureAwait(false);
             }
         }
         catch (Exception ex)

@@ -363,6 +363,54 @@ public class PlansRepository : IPlansRepository
         }
     }
 
+    /// <inheritdoc />
+    public int SaveDeferred(Plans planDetails)
+    {
+        if (planDetails == null || string.IsNullOrEmpty(planDetails.PlanId))
+        {
+            return 0;
+        }
+
+        var existingPlan = this.context.Plans
+            .Include(p => p.MeteredDimensions)
+            .FirstOrDefault(s => s.PlanId == planDetails.PlanId);
+
+        if (existingPlan != null)
+        {
+            existingPlan.PlanId = planDetails.PlanId;
+            existingPlan.Description = planDetails.Description;
+            existingPlan.DisplayName = planDetails.DisplayName;
+            existingPlan.OfferId = planDetails.OfferId;
+            existingPlan.IsmeteringSupported = planDetails.IsmeteringSupported;
+            this.CheckMeteredDimension(planDetails, existingPlan);
+            this.context.Plans.Update(existingPlan);
+            return existingPlan.Id;
+        }
+
+        this.context.Plans.Add(planDetails);
+        return planDetails.Id;
+    }
+
+    /// <inheritdoc />
+    public int AddDeferred(Plans planDetails)
+    {
+        if (planDetails == null || string.IsNullOrEmpty(planDetails.PlanId))
+        {
+            return 0;
+        }
+
+        var existingPlan = this.context.Plans
+            .Include(p => p.MeteredDimensions)
+            .FirstOrDefault(s => s.PlanId == planDetails.PlanId);
+
+        if (existingPlan == null)
+        {
+            this.context.Plans.Add(planDetails);
+        }
+
+        return planDetails.Id;
+    }
+
     /// <summary>
     /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
     /// </summary>

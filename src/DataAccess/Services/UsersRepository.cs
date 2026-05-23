@@ -94,6 +94,22 @@ public class UsersRepository : IUsersRepository
         return this.context.Users.Where(s => s.EmailAddress == emailAddress).FirstOrDefault();
     }
 
+    /// <inheritdoc />
+    public Users SaveDeferred(Users userDetail)
+    {
+        var existingUser = this.context.Users
+            .FirstOrDefault(s => s.EmailAddress == userDetail.EmailAddress);
+        if (existingUser != null)
+        {
+            existingUser.FullName = userDetail.FullName;
+            this.context.Users.Update(existingUser);
+            return existingUser;
+        }
+
+        this.context.Users.Add(userDetail);
+        return userDetail;
+    }
+
     /// <summary>
     /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
     /// </summary>

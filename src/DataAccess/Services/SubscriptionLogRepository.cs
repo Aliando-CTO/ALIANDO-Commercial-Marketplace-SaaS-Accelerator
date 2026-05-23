@@ -79,6 +79,12 @@ public class SubscriptionLogRepository : ISubscriptionLogRepository
         this.context.SaveChanges();
     }
 
+    /// <inheritdoc />
+    public void SaveDeferred(SubscriptionAuditLogs subscriptionLogs)
+    {
+        this.context.SubscriptionAuditLogs.Add(subscriptionLogs);
+    }
+
     /// <summary>
     /// Logs the status during provisioning.
     /// </summary>

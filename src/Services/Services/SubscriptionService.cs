@@ -27,6 +27,11 @@ public class SubscriptionService
     private IPlansRepository planRepository;
 
     /// <summary>
+    /// The unit of work for batching repository mutations into a single commit.
+    /// </summary>
+    private readonly ISaasKitUnitOfWork unitOfWork;
+
+    /// <summary>
     /// The current user identifier.
     /// </summary>
     private int currentUserId;
@@ -36,12 +41,23 @@ public class SubscriptionService
     /// </summary>
     /// <param name="subscriptionRepo">The subscription repo.</param>
     /// <param name="planRepository">The plan repository.</param>
+    /// <param name="unitOfWork">The unit of work for batching commits.</param>
     /// <param name="currentUserId">The current user identifier.</param>
-    public SubscriptionService(ISubscriptionsRepository subscriptionRepo, IPlansRepository planRepository, int currentUserId = 0)
+    public SubscriptionService(ISubscriptionsRepository subscriptionRepo, IPlansRepository planRepository, ISaasKitUnitOfWork unitOfWork, int currentUserId = 0)
     {
         this.subscriptionRepository = subscriptionRepo;
         this.planRepository = planRepository;
+        this.unitOfWork = unitOfWork;
         this.currentUserId = currentUserId;
+    }
+
+    /// <summary>
+    /// Back-compat constructor for callers that hand-construct this service without a unit of work.
+    /// Deferred/batched methods are unavailable on instances built this way.
+    /// </summary>
+    public SubscriptionService(ISubscriptionsRepository subscriptionRepo, IPlansRepository planRepository, int currentUserId = 0)
+        : this(subscriptionRepo, planRepository, unitOfWork: null, currentUserId)
+    {
     }
 
     /// <summary>
@@ -60,8 +76,49 @@ public class SubscriptionService
     /// <returns>Subscription Id.</returns>
     public int AddOrUpdatePartnerSubscriptions(SubscriptionResult subscriptionDetail, int customerUserId = 0)
     {
+        return this.subscriptionRepository.Save(BuildSubscription(subscriptionDetail, customerUserId));
+    }
+
+    /// <summary>
+    /// Stages an add/update for a partner subscription without committing. Caller must commit
+    /// via <see cref="ISaasKitUnitOfWork"/>. Suitable for loops that batch many writes.
+    /// </summary>
+    /// <param name="subscriptionDetail">The subscription detail.</param>
+    /// <param name="customerUserId">The customer user identifier.</param>
+    /// <returns>Subscription Id (0 for new rows until SaveChanges runs).</returns>
+    public int AddOrUpdatePartnerSubscriptionsDeferred(SubscriptionResult subscriptionDetail, int customerUserId = 0)
+    {
+        return this.subscriptionRepository.SaveDeferred(BuildSubscription(subscriptionDetail, customerUserId));
+    }
+
+    /// <summary>
+    /// Stages an add/update for a partner subscription against a (possibly insert-pending) Users
+    /// entity. Sets <c>Subscription.User</c> via navigation property so EF resolves the FK at
+    /// commit time — works even when the user itself was created in the same deferred batch.
+    /// </summary>
+    /// <param name="subscriptionDetail">The subscription detail.</param>
+    /// <param name="customerUser">The customer user entity. If null, falls back to the current user.</param>
+    /// <returns>Subscription Id (0 for new rows until SaveChanges runs).</returns>
+    public int AddOrUpdatePartnerSubscriptionsDeferred(SubscriptionResult subscriptionDetail, Users customerUser)
+    {
+        var subscription = BuildSubscription(subscriptionDetail, customerUserId: 0);
+        if (customerUser != null)
+        {
+            subscription.User = customerUser;
+            subscription.UserId = null;
+        }
+        else
+        {
+            subscription.UserId = this.currentUserId;
+        }
+
+        return this.subscriptionRepository.SaveDeferred(subscription);
+    }
+
+    private Subscriptions BuildSubscription(SubscriptionResult subscriptionDetail, int customerUserId)
+    {
         var isActive = this.IsSubscriptionDeleted(Convert.ToString(subscriptionDetail.SaasSubscriptionStatus));
-        Subscriptions newSubscription = new Subscriptions()
+        return new Subscriptions()
         {
             Id = 0,
             AmpplanId = subscriptionDetail.PlanId,
@@ -79,9 +136,8 @@ public class SubscriptionService
             AmpOfferId = subscriptionDetail.OfferId,
             Term = subscriptionDetail.Term.TermUnit.ToString(),
             StartDate = subscriptionDetail.Term.StartDate.ToUniversalTime().DateTime,
-            EndDate = subscriptionDetail.Term.EndDate.ToUniversalTime().DateTime
+            EndDate = subscriptionDetail.Term.EndDate.ToUniversalTime().DateTime,
         };
-        return this.subscriptionRepository.Save(newSubscription);
     }
 
     /// <summary>
@@ -261,17 +317,20 @@ public class SubscriptionService
     {
         foreach (var planDetail in allPlanDetail)
         {
-            this.planRepository.Save(new Plans
-            {
-                PlanId = planDetail.PlanId,
-                DisplayName = planDetail.DisplayName,
-                Description = "",
-                OfferId = planDetail.OfferId,
-                PlanGuid = planDetail.PlanGUID,
-                MeteredDimensions = planDetail.GetmeteredDimensions(),
-                IsmeteringSupported = planDetail.IsmeteringSupported,
-                IsPerUser = planDetail.IsPerUserPlan,
-            });
+            this.planRepository.Save(BuildPlan(planDetail, includeMeteredDimensions: true));
+        }
+    }
+
+    /// <summary>
+    /// Stages add/update for all plan details without committing. Caller must commit via
+    /// <see cref="ISaasKitUnitOfWork"/>. Suitable for loops that batch many writes.
+    /// </summary>
+    /// <param name="allPlanDetail">All plan detail.</param>
+    public void AddUpdateAllPlanDetailsForSubscriptionDeferred(List<PlanDetailResultExtension> allPlanDetail)
+    {
+        foreach (var planDetail in allPlanDetail)
+        {
+            this.planRepository.SaveDeferred(BuildPlan(planDetail, includeMeteredDimensions: true));
         }
     }
 
@@ -282,18 +341,33 @@ public class SubscriptionService
     /// <param name="allPlanDetail">All plan detail.</param>
     public void AddPlanDetailsForSubscription(PlanDetailResultExtension planDetail)
     {
-        this.planRepository.Add(new Plans
+        this.planRepository.Add(BuildPlan(planDetail, includeMeteredDimensions: false));
+    }
+
+    /// <summary>
+    /// Stages an add for an unsubscribed-subscription plan without committing. Caller must
+    /// commit via <see cref="ISaasKitUnitOfWork"/>. Suitable for loops that batch many writes.
+    /// </summary>
+    /// <param name="planDetail">The plan detail.</param>
+    public void AddPlanDetailsForSubscriptionDeferred(PlanDetailResultExtension planDetail)
+    {
+        this.planRepository.AddDeferred(BuildPlan(planDetail, includeMeteredDimensions: false));
+    }
+
+    private static Plans BuildPlan(PlanDetailResultExtension planDetail, bool includeMeteredDimensions)
+    {
+        return new Plans
         {
             PlanId = planDetail.PlanId,
             DisplayName = planDetail.DisplayName,
             Description = "",
             OfferId = planDetail.OfferId,
             PlanGuid = planDetail.PlanGUID,
+            MeteredDimensions = includeMeteredDimensions ? planDetail.GetmeteredDimensions() : null,
+            // For unsubscribed-subscription plans, force false to avoid NULL in the DB.
+            IsmeteringSupported = includeMeteredDimensions && (planDetail.IsmeteringSupported ?? false),
             IsPerUser = planDetail.IsPerUserPlan,
-            // Setting to false to avoid NULL in the DB. This only applies
-            // when creating a plan for an unsubscribed subscription, so it is fine.
-            IsmeteringSupported = false   
-        });
+        };
     }
 
     /// <summary>
@@ -336,15 +410,20 @@ public class SubscriptionService
     }
 
     /// <summary>
-    /// Adds the plan details for subscription.
+    /// Adds the plan details for subscription. Stages all rows then commits in a single round-trip.
     /// </summary>
     /// <param name="subscriptionParameters">The subscription parameters.</param>
     /// <param name="currentUserId">The current user identifier.</param>
     public void AddSubscriptionParameters(List<SubscriptionParametersModel> subscriptionParameters, int? currentUserId)
     {
+        if (subscriptionParameters is null || subscriptionParameters.Count == 0)
+        {
+            return;
+        }
+
         foreach (var parameters in subscriptionParameters)
         {
-            this.subscriptionRepository.AddSubscriptionParameters(new SubscriptionParametersOutput
+            this.subscriptionRepository.AddSubscriptionParametersDeferred(new SubscriptionParametersOutput
             {
                 Id = parameters.Id,
                 PlanId = parameters.PlanId,
@@ -357,6 +436,8 @@ public class SubscriptionService
                 CreateDate = DateTime.Now,
             });
         }
+
+        this.unitOfWork.SaveChanges();
     }
 
     /// <summary>

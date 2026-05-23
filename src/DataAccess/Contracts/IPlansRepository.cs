@@ -84,4 +84,18 @@ public interface IPlansRepository : IDisposable, IBaseRepository<Plans>
     /// <param name="planDetails">The plan details.</param>
     /// <returns> Plan Id.</returns>
     int Add(Plans planDetails);
+
+    /// <summary>
+    /// Stages an add/update for a plan without committing. Caller must commit via ISaasKitUnitOfWork.
+    /// </summary>
+    /// <param name="planDetails">The plan details.</param>
+    /// <returns>Plan Id (0 for new rows until SaveChanges runs).</returns>
+    int SaveDeferred(Plans planDetails);
+
+    /// <summary>
+    /// Stages an add for a plan without committing. Caller must commit via ISaasKitUnitOfWork.
+    /// </summary>
+    /// <param name="planDetails">The plan details.</param>
+    /// <returns>Plan Id (0 for new rows until SaveChanges runs).</returns>
+    int AddDeferred(Plans planDetails);
 }

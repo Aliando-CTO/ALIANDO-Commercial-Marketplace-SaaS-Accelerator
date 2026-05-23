@@ -117,6 +117,27 @@ public class OffersRepository : IOffersRepository
         return this.context.Offers.Where(s => s.Id == id).FirstOrDefault();
     }
 
+    /// <inheritdoc />
+    public Guid AddDeferred(Offers offerDetails)
+    {
+        if (offerDetails == null)
+        {
+            return default;
+        }
+
+        var existingOffer = this.context.Offers.FirstOrDefault(s => s.OfferId == offerDetails.OfferId);
+        if (existingOffer != null)
+        {
+            existingOffer.OfferId = offerDetails.OfferId;
+            existingOffer.OfferName = offerDetails.OfferName;
+            this.context.Offers.Update(existingOffer);
+            return existingOffer.OfferGuid;
+        }
+
+        this.context.Offers.Add(offerDetails);
+        return offerDetails.OfferGuid;
+    }
+
     /// <summary>
     /// Removes the specified plan details.
     /// </summary>

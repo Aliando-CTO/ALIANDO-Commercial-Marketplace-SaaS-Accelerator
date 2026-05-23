@@ -33,17 +33,36 @@ public class UserService
     {
         if (!string.IsNullOrEmpty(partnerDetailViewModel.EmailAddress))
         {
-            Users newPartnerDetail = new Users()
-            {
-                UserId = partnerDetailViewModel.UserId,
-                EmailAddress = partnerDetailViewModel.EmailAddress,
-                FullName = partnerDetailViewModel.FullName,
-                CreatedDate = DateTime.Now,
-            };
-            return this.userRepository.Save(newPartnerDetail);
+            return this.userRepository.Save(BuildUser(partnerDetailViewModel));
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// Stages an add/update for a user without committing. Caller must commit via
+    /// <see cref="ISaasKitUnitOfWork"/>. Returns the tracked entity so dependent rows
+    /// can set it as a navigation property and let EF resolve the FK at commit time.
+    /// </summary>
+    public Users AddUserDeferred(PartnerDetailViewModel partnerDetailViewModel)
+    {
+        if (string.IsNullOrEmpty(partnerDetailViewModel.EmailAddress))
+        {
+            return null;
+        }
+
+        return this.userRepository.SaveDeferred(BuildUser(partnerDetailViewModel));
+    }
+
+    private static Users BuildUser(PartnerDetailViewModel partnerDetailViewModel)
+    {
+        return new Users()
+        {
+            UserId = partnerDetailViewModel.UserId,
+            EmailAddress = partnerDetailViewModel.EmailAddress,
+            FullName = partnerDetailViewModel.FullName,
+            CreatedDate = DateTime.Now,
+        };
     }
 
     /// <summary>
