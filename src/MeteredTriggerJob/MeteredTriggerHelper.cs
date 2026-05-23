@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Marketplace.SaaS.Accelerator.DataAccess.Contracts;
 using Marketplace.SaaS.Accelerator.DataAccess.Entities;
 using Marketplace.SaaS.Accelerator.Services.Contracts;
@@ -109,7 +110,7 @@ public class Executor
     /// <summary>
     /// Execute the scheduler engine
     /// </summary>
-    public void Execute()
+    public async Task ExecuteAsync()
     {
         LogLine($"Executing the Meter scheduler {appVersionService?.Version}");
 
@@ -180,7 +181,7 @@ public class Executor
                         }
                         else if (timeDifferentInHours == 0)
                         {
-                            TriggerSchedulerItem(scheduledItem);
+                            await TriggerSchedulerItemAsync(scheduledItem).ConfigureAwait(false);
                         }
                         else
                         {
@@ -204,7 +205,7 @@ public class Executor
     /// Trigger scheduler task
     /// </summary>
     /// <param name="item">scheduler task</param>
-    private void TriggerSchedulerItem(SchedulerManagerViewModel item)
+    private async Task TriggerSchedulerItemAsync(SchedulerManagerViewModel item)
     {
         try
         {
@@ -224,7 +225,7 @@ public class Executor
             try
             {
                 LogLine($"Scheduled Item Id: {item.Id} Request {requestJson}", true);
-                meteringUsageResult = billingApiService.EmitUsageEventAsync(subscriptionUsageRequest).ConfigureAwait(false).GetAwaiter().GetResult();
+                meteringUsageResult = await billingApiService.EmitUsageEventAsync(subscriptionUsageRequest).ConfigureAwait(false);
                 responseJson = JsonSerializer.Serialize(meteringUsageResult);
                 LogLine($"Scheduled Item Id: {item.Id} Response {responseJson}", true);
             }

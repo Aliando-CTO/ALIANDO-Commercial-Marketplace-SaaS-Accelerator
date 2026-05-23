@@ -45,6 +45,15 @@ public class SubscriptionService
     }
 
     /// <summary>
+    /// Sets the current user identifier on this scoped service instance.
+    /// </summary>
+    /// <param name="userId">The current user identifier.</param>
+    public void SetCurrentUserId(int userId)
+    {
+        this.currentUserId = userId;
+    }
+
+    /// <summary>
     /// Adds/Update partner subscriptions.
     /// </summary>
     /// <param name="subscriptionDetail">The subscription detail.</param>

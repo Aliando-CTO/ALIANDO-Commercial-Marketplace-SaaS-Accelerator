@@ -76,16 +76,6 @@ public class HomeController : BaseController
 
     private readonly IApplicationConfigRepository applicationConfigRepository;
 
-    private readonly ISubscriptionsRepository subscriptionRepository;
-
-    private readonly IEmailTemplateRepository emailTemplateRepository;
-
-    private readonly IPlanEventsMappingRepository planEventsMappingRepository;
-
-    private readonly IEventsRepository eventsRepository;
-
-    private readonly IEmailService emailService;
-
     private readonly ISubscriptionStatusHandler pendingFulfillmentStatusHandlers;
 
     private readonly ISubscriptionStatusHandler pendingActivationStatusHandlers;
@@ -94,23 +84,19 @@ public class HomeController : BaseController
 
     private readonly ISubscriptionStatusHandler notificationStatusHandlers;
 
-    private readonly ILoggerFactory loggerFactory;
-
     private readonly IOffersRepository offersRepository;
-
-    private readonly IOfferAttributesRepository offersAttributeRepository;
 
     private readonly ApplicationConfigService applicationConfigService;
 
-    private readonly ISAGitReleasesService sAGitReleasesService; 
+    private readonly ISAGitReleasesService sAGitReleasesService;
 
-    private UserService userService;
+    private readonly UserService userService;
 
-    private SubscriptionService subscriptionService = null;
+    private readonly SubscriptionService subscriptionService;
 
-    private ApplicationLogService applicationLogService = null;
+    private readonly ApplicationLogService applicationLogService;
 
-    private SaaSApiClientConfiguration saaSApiClientConfiguration;
+    private readonly SaaSApiClientConfiguration saaSApiClientConfiguration;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="HomeController" /> class.
@@ -137,27 +123,28 @@ public class HomeController : BaseController
     /// <param name="offersRepository">The offers repository.</param>
     /// <param name="offersAttributeRepository">The offers attribute repository.</param>
     public HomeController(
-        IUsersRepository usersRepository, 
-        IMeteredBillingApiService billingApiService,  
-        ISubscriptionsRepository subscriptionRepo, 
-        IPlansRepository planRepository, 
-        ISubscriptionUsageLogsRepository subscriptionUsageLogsRepository, 
-        IMeteredDimensionsRepository dimensionsRepository, 
-        ISubscriptionLogRepository subscriptionLogsRepo, 
-        IApplicationConfigRepository applicationConfigRepository, 
-        IUsersRepository userRepository, 
-        IFulfillmentApiService fulfillApiService, 
-        IApplicationLogRepository applicationLogRepository, 
-        IEmailTemplateRepository emailTemplateRepository, 
-        IPlanEventsMappingRepository planEventsMappingRepository, 
-        IEventsRepository eventsRepository, 
-        SaaSApiClientConfiguration saaSApiClientConfiguration, 
-        ILoggerFactory loggerFactory, 
-        IEmailService emailService, 
-        IOffersRepository offersRepository, 
-        IOfferAttributesRepository offersAttributeRepository,
+        IUsersRepository userRepository,
+        IMeteredBillingApiService billingApiService,
+        ISubscriptionsRepository subscriptionRepo,
+        IPlansRepository planRepository,
+        ISubscriptionUsageLogsRepository subscriptionUsageLogsRepository,
+        IMeteredDimensionsRepository dimensionsRepository,
+        ISubscriptionLogRepository subscriptionLogsRepo,
+        IApplicationConfigRepository applicationConfigRepository,
+        IFulfillmentApiService fulfillApiService,
+        IApplicationLogRepository applicationLogRepository,
+        IOffersRepository offersRepository,
+        SaaSApiClientConfiguration saaSApiClientConfiguration,
         IAppVersionService appVersionService,
-        ISAGitReleasesService sAGitReleasesService, 
+        ISAGitReleasesService sAGitReleasesService,
+        ApplicationConfigService applicationConfigService,
+        UserService userService,
+        SubscriptionService subscriptionService,
+        ApplicationLogService applicationLogService,
+        PendingActivationStatusHandler pendingActivationStatusHandlers,
+        PendingFulfillmentStatusHandler pendingFulfillmentStatusHandlers,
+        NotificationStatusHandler notificationStatusHandlers,
+        UnsubscribeStatusHandler unsubscribeStatusHandlers,
         SaaSClientLogger<HomeController> logger) : base(applicationConfigRepository, appVersionService)
     {
         this.billingApiService = billingApiService;
@@ -168,69 +155,27 @@ public class HomeController : BaseController
         this.dimensionsRepository = dimensionsRepository;
         this.logger = logger;
         this.applicationConfigRepository = applicationConfigRepository;
-        this.applicationConfigService = new ApplicationConfigService(this.applicationConfigRepository);
         this.userRepository = userRepository;
-        this.userService = new UserService(userRepository);
         this.fulfillApiService = fulfillApiService;
         this.applicationLogRepository = applicationLogRepository;
-        this.applicationLogService = new ApplicationLogService(this.applicationLogRepository);
-        this.subscriptionRepository = this.subscriptionRepo;
-        this.subscriptionService = new SubscriptionService(this.subscriptionRepository, this.planRepository);
-        this.emailTemplateRepository = emailTemplateRepository;
-        this.planEventsMappingRepository = planEventsMappingRepository;
-        this.eventsRepository = eventsRepository;
-        this.emailService = emailService;
         this.offersRepository = offersRepository;
-        this.offersAttributeRepository = offersAttributeRepository;
-        this.loggerFactory = loggerFactory;
         this.saaSApiClientConfiguration = saaSApiClientConfiguration;
         this.sAGitReleasesService = sAGitReleasesService;
-
-        this.pendingActivationStatusHandlers = new PendingActivationStatusHandler(
-            fulfillApiService,
-            subscriptionRepo,
-            subscriptionLogsRepo,
-            planRepository,
-            userRepository,
-            loggerFactory.CreateLogger<PendingActivationStatusHandler>());
-
-        this.pendingFulfillmentStatusHandlers = new PendingFulfillmentStatusHandler(
-            fulfillApiService,
-            applicationConfigRepository,
-            subscriptionRepo,
-            subscriptionLogsRepo,
-            planRepository,
-            userRepository,
-            this.loggerFactory.CreateLogger<PendingFulfillmentStatusHandler>());
-
-        this.notificationStatusHandlers = new NotificationStatusHandler(
-            fulfillApiService,
-            planRepository,
-            applicationConfigRepository,
-            emailTemplateRepository,
-            planEventsMappingRepository,
-            offersAttributeRepository,
-            eventsRepository,
-            subscriptionRepo,
-            userRepository,
-            offersRepository,
-            emailService,
-            this.loggerFactory.CreateLogger<NotificationStatusHandler>());
-
-        this.unsubscribeStatusHandlers = new UnsubscribeStatusHandler(
-            fulfillApiService,
-            subscriptionRepo,
-            subscriptionLogsRepo,
-            planRepository,
-            userRepository,
-            this.loggerFactory.CreateLogger<UnsubscribeStatusHandler>());
+        this.applicationConfigService = applicationConfigService;
+        this.userService = userService;
+        this.subscriptionService = subscriptionService;
+        this.applicationLogService = applicationLogService;
+        this.pendingActivationStatusHandlers = pendingActivationStatusHandlers;
+        this.pendingFulfillmentStatusHandlers = pendingFulfillmentStatusHandlers;
+        this.notificationStatusHandlers = notificationStatusHandlers;
+        this.unsubscribeStatusHandlers = unsubscribeStatusHandlers;
     }
 
     /// <summary>
     /// Indexes this instance.
     /// </summary>
     /// <returns> The <see cref="IActionResult" />.</returns>
-    public IActionResult Index()
+    public async Task<IActionResult> Index()
     {
         this.logger.Info("Home Controller / Index ");
         try
@@ -241,7 +186,7 @@ public class HomeController : BaseController
             try
             {
                 // Get the latest release version from GitHub
-                var latestReleaseVersion = this.sAGitReleasesService.GetLatestReleaseFromGitHub();
+                var latestReleaseVersion = await this.sAGitReleasesService.GetLatestReleaseFromGitHubAsync().ConfigureAwait(false);
 
                 // If its come back empty then there is nothing we can check
                 if (!String.IsNullOrEmpty(latestReleaseVersion))
@@ -364,7 +309,7 @@ public class HomeController : BaseController
         {
             var userId = this.userService.AddUser(this.GetCurrentUserDetail());
             var currentUserId = this.userService.GetUserIdFromEmailAddress(this.CurrentUserEmailAddress);
-            this.subscriptionService = new SubscriptionService(this.subscriptionRepo, this.planRepository, userId);
+            this.subscriptionService.SetCurrentUserId(userId);
             this.logger.Info(HttpUtility.HtmlEncode($"User authenticate successfully & GetSubscriptionByIdAsync  SubscriptionID :{subscriptionId}"));
             this.TempData["ShowWelcomeScreen"] = false;
             var oldValue = this.subscriptionService.GetSubscriptionsBySubscriptionId(subscriptionId);
@@ -404,7 +349,7 @@ public class HomeController : BaseController
             {
                 var userId = this.userService.AddUser(this.GetCurrentUserDetail());
                 var currentUserId = this.userService.GetUserIdFromEmailAddress(this.CurrentUserEmailAddress);
-                this.subscriptionService = new SubscriptionService(this.subscriptionRepository, this.planRepository, userId);
+                this.subscriptionService.SetCurrentUserId(userId);
                 this.logger.Info(HttpUtility.HtmlEncode($"GetSubscriptionByIdAsync SubscriptionID :{subscriptionId} :: planID:{planId}:: operation:{operation}"));
 
                 this.TempData["ShowWelcomeScreen"] = false;
@@ -447,7 +392,7 @@ public class HomeController : BaseController
             {
                 if (oldValue.SubscriptionStatus.ToString() != SubscriptionStatusEnumExtension.PendingActivation.ToString())
                 {
-                    this.subscriptionRepository.UpdateStatusForSubscription(subscriptionId, SubscriptionStatusEnumExtension.PendingActivation.ToString(), true);
+                    this.subscriptionRepo.UpdateStatusForSubscription(subscriptionId, SubscriptionStatusEnumExtension.PendingActivation.ToString(), true);
 
                     SubscriptionAuditLogs auditLog = new SubscriptionAuditLogs()
                     {
@@ -466,7 +411,7 @@ public class HomeController : BaseController
 
             if (operation == "Deactivate")
             {
-                this.subscriptionRepository.UpdateStatusForSubscription(subscriptionId, SubscriptionStatusEnumExtension.PendingUnsubscribe.ToString(), true);
+                this.subscriptionRepo.UpdateStatusForSubscription(subscriptionId, SubscriptionStatusEnumExtension.PendingUnsubscribe.ToString(), true);
                 SubscriptionAuditLogs auditLog = new SubscriptionAuditLogs()
                 {
                     Attribute = Convert.ToString(SubscriptionLogAttributes.Status),
@@ -616,7 +561,7 @@ public class HomeController : BaseController
     /// <returns> The <see cref="IActionResult" />.</returns>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public IActionResult ManageSubscriptionUsage(SubscriptionUsageViewModel subscriptionData)
+    public async Task<IActionResult> ManageSubscriptionUsage(SubscriptionUsageViewModel subscriptionData)
     {
         this.logger.Info(HttpUtility.HtmlEncode($"Home Controller / ManageSubscriptionUsage  subscriptionData: {JsonSerializer.Serialize(subscriptionData)}"));
         try
@@ -638,7 +583,7 @@ public class HomeController : BaseController
                 try
                 {
                     this.logger.Info("EmitUsageEventAsync");
-                    meteringUsageResult = this.billingApiService.EmitUsageEventAsync(subscriptionUsageRequest).ConfigureAwait(false).GetAwaiter().GetResult();
+                    meteringUsageResult = await this.billingApiService.EmitUsageEventAsync(subscriptionUsageRequest).ConfigureAwait(false);
                     responseJson = JsonSerializer.Serialize(meteringUsageResult);
                     this.logger.Info(responseJson);
                 }
@@ -882,16 +827,16 @@ public class HomeController : BaseController
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public IActionResult FetchAllSubscriptions()
+    public async Task<IActionResult> FetchAllSubscriptions()
     {
         var currentUserId = this.userService.GetUserIdFromEmailAddress(this.CurrentUserEmailAddress);
 
         try
         {
-            this.subscriptionService = new SubscriptionService(this.subscriptionRepository, this.planRepository, currentUserId);
+            this.subscriptionService.SetCurrentUserId(currentUserId);
 
             // Step 1: Get all subscriptions from the API
-            var subscriptions = this.fulfillApiService.GetAllSubscriptionAsync().GetAwaiter().GetResult();
+            var subscriptions = await this.fulfillApiService.GetAllSubscriptionAsync().ConfigureAwait(false);
             foreach (SubscriptionResult subscription in subscriptions)
             {
                 var customerUserId = 0;
@@ -926,7 +871,7 @@ public class HomeController : BaseController
                     }
                     else
                     {
-                        var subscriptionPlanDetail = this.fulfillApiService.GetAllPlansForSubscriptionAsync(subscription.Id).ConfigureAwait(false).GetAwaiter().GetResult();
+                        var subscriptionPlanDetail = await this.fulfillApiService.GetAllPlansForSubscriptionAsync(subscription.Id).ConfigureAwait(false);
                         subscriptionPlanDetail.ForEach(x =>
                         {
                             x.OfferId = OfferId;
@@ -986,7 +931,7 @@ public class HomeController : BaseController
         {
             var errorMessage = $"Message: {ex.Message} ({ex.InnerException})";
             this.logger.LogError(errorMessage);
-            applicationLogService.AddApplicationLog(errorMessage).GetAwaiter().GetResult();
+            await applicationLogService.AddApplicationLog(errorMessage).ConfigureAwait(false);
 
             return BadRequest();
         }

@@ -66,16 +66,6 @@ public class HomeController : BaseController
 
     private readonly IApplicationConfigRepository applicationConfigRepository;
 
-    private readonly IEmailTemplateRepository emailTemplateRepository;
-
-    private readonly IPlanEventsMappingRepository planEventsMappingRepository;
-
-    private readonly IOfferAttributesRepository offerAttributesRepository;
-
-    private readonly IEventsRepository eventsRepository;
-
-    private readonly IEmailService emailService;
-
     private readonly ISubscriptionStatusHandler pendingFulfillmentStatusHandlers;
 
     private readonly ISubscriptionStatusHandler pendingActivationStatusHandlers;
@@ -86,20 +76,15 @@ public class HomeController : BaseController
 
     private readonly ApplicationConfigService applicationConfigService;
 
-    private readonly ILoggerFactory loggerFactory;
-
     private readonly IWebNotificationService _webNotificationService;
 
-    private SubscriptionService subscriptionService = null;
+    private readonly SubscriptionService subscriptionService;
 
-    private ApplicationLogService applicationLogService = null;
+    private readonly ApplicationLogService applicationLogService;
 
-    private PlanService planService = null;
+    private readonly PlanService planService;
 
-    /// <summary>
-    /// The user service.
-    /// </summary>
-    private UserService userService;
+    private readonly UserService userService;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="HomeController" /> class.
@@ -121,23 +106,26 @@ public class HomeController : BaseController
     /// <param name="loggerFactory">The logger factory.</param>
     /// <param name="emailService">The email service.</param>
     public HomeController(
-        SaaSClientLogger<HomeController> logger, 
-        IFulfillmentApiService apiService, 
-        ISubscriptionsRepository subscriptionRepo, 
-        IPlansRepository planRepository, 
-        IUsersRepository userRepository, 
-        IApplicationLogRepository applicationLogRepository, 
-        ISubscriptionLogRepository subscriptionLogsRepo, 
-        IApplicationConfigRepository applicationConfigRepository, 
-        IEmailTemplateRepository emailTemplateRepository, 
-        IOffersRepository offersRepository, 
-        IPlanEventsMappingRepository planEventsMappingRepository, 
-        IOfferAttributesRepository offerAttributesRepository, 
-        IEventsRepository eventsRepository, 
-        ILoggerFactory loggerFactory, 
-        IEmailService emailService,
+        SaaSClientLogger<HomeController> logger,
+        IFulfillmentApiService apiService,
+        ISubscriptionsRepository subscriptionRepo,
+        IPlansRepository planRepository,
+        IUsersRepository userRepository,
+        IApplicationLogRepository applicationLogRepository,
+        ISubscriptionLogRepository subscriptionLogsRepo,
+        IApplicationConfigRepository applicationConfigRepository,
+        IOffersRepository offersRepository,
         IWebNotificationService webNotificationService,
-        IAppVersionService appVersionService) : base(appVersionService)
+        IAppVersionService appVersionService,
+        ApplicationConfigService applicationConfigService,
+        UserService userService,
+        SubscriptionService subscriptionService,
+        ApplicationLogService applicationLogService,
+        PlanService planService,
+        PendingActivationStatusHandler pendingActivationStatusHandlers,
+        PendingFulfillmentStatusHandler pendingFulfillmentStatusHandlers,
+        NotificationStatusHandler notificationStatusHandlers,
+        UnsubscribeStatusHandler unsubscribeStatusHandlers) : base(appVersionService)
     {
         this.apiService = apiService;
         this.subscriptionRepository = subscriptionRepo;
@@ -145,60 +133,19 @@ public class HomeController : BaseController
         this.applicationLogRepository = applicationLogRepository;
         this.planRepository = planRepository;
         this.userRepository = userRepository;
-        this.userService = new UserService(this.userRepository);
-        this.subscriptionService = new SubscriptionService(this.subscriptionRepository, this.planRepository);
-        this.applicationLogService = new ApplicationLogService(this.applicationLogRepository);
         this.applicationConfigRepository = applicationConfigRepository;
-        this.applicationConfigService = new ApplicationConfigService(this.applicationConfigRepository);
-        this.emailTemplateRepository = emailTemplateRepository;
-        this.planEventsMappingRepository = planEventsMappingRepository;
-        this.offerAttributesRepository = offerAttributesRepository;
-        this.logger = logger;
         this.offersRepository = offersRepository;
-        this.planService = new PlanService(this.planRepository, this.offerAttributesRepository, this.offersRepository);
-        this.eventsRepository = eventsRepository;
-        this.emailService = emailService;
-        this.loggerFactory = loggerFactory;
+        this.logger = logger;
         this._webNotificationService = webNotificationService;
-
-        this.pendingActivationStatusHandlers = new PendingActivationStatusHandler(
-            apiService,
-            subscriptionRepo,
-            subscriptionLogsRepo,
-            planRepository,
-            userRepository,
-            loggerFactory.CreateLogger<PendingActivationStatusHandler>());
-
-        this.pendingFulfillmentStatusHandlers = new PendingFulfillmentStatusHandler(
-            apiService,
-            applicationConfigRepository,
-            subscriptionRepo,
-            subscriptionLogsRepo,
-            planRepository,
-            userRepository,
-            this.loggerFactory.CreateLogger<PendingFulfillmentStatusHandler>());
-
-        this.notificationStatusHandlers = new NotificationStatusHandler(
-            apiService,
-            planRepository,
-            applicationConfigRepository,
-            emailTemplateRepository,
-            planEventsMappingRepository,
-            offerAttributesRepository,
-            eventsRepository,
-            subscriptionRepo,
-            userRepository,
-            offersRepository,
-            emailService,
-            this.loggerFactory.CreateLogger<NotificationStatusHandler>());
-
-        this.unsubscribeStatusHandlers = new UnsubscribeStatusHandler(
-            apiService,
-            subscriptionRepo,
-            subscriptionLogsRepo,
-            planRepository,
-            userRepository,
-            this.loggerFactory.CreateLogger<UnsubscribeStatusHandler>());
+        this.applicationConfigService = applicationConfigService;
+        this.userService = userService;
+        this.subscriptionService = subscriptionService;
+        this.applicationLogService = applicationLogService;
+        this.planService = planService;
+        this.pendingActivationStatusHandlers = pendingActivationStatusHandlers;
+        this.pendingFulfillmentStatusHandlers = pendingFulfillmentStatusHandlers;
+        this.notificationStatusHandlers = notificationStatusHandlers;
+        this.unsubscribeStatusHandlers = unsubscribeStatusHandlers;
     }
 
     /// <summary>
@@ -223,7 +170,7 @@ public class HomeController : BaseController
             {
                 var userId = this.userService.AddUser(this.GetCurrentUserDetail());
                 var currentUserId = this.userService.GetUserIdFromEmailAddress(this.CurrentUserEmailAddress);
-                this.subscriptionService = new SubscriptionService(this.subscriptionRepository, this.planRepository, userId);
+                this.subscriptionService.SetCurrentUserId(userId);
                 this.logger.Info("User authenticated successfully");
                 if (!string.IsNullOrEmpty(token))
                 {
@@ -518,7 +465,7 @@ public class HomeController : BaseController
             {
                 var userId = this.userService.AddUser(this.GetCurrentUserDetail());
                 var currentUserId = this.userService.GetUserIdFromEmailAddress(this.CurrentUserEmailAddress);
-                this.subscriptionService = new SubscriptionService(this.subscriptionRepository, this.planRepository, userId);
+                this.subscriptionService.SetCurrentUserId(userId);
                 this.TempData["ShowWelcomeScreen"] = false;
 
                 subscriptionDetail = this.subscriptionService.GetSubscriptionsBySubscriptionId(subscriptionId);
@@ -848,7 +795,7 @@ public class HomeController : BaseController
             {
                 var userId = this.userService.AddUser(this.GetCurrentUserDetail());
                 var currentUserId = this.userService.GetUserIdFromEmailAddress(this.CurrentUserEmailAddress);
-                this.subscriptionService = new SubscriptionService(this.subscriptionRepository, this.planRepository, userId);
+                this.subscriptionService.SetCurrentUserId(userId);
                 var planDetails = this.planRepository.GetById(planId);
                 this.TempData["ShowWelcomeScreen"] = false;
                 subscriptionDetail = this.subscriptionService.GetPartnerSubscription(this.CurrentUserEmailAddress, subscriptionId).FirstOrDefault();

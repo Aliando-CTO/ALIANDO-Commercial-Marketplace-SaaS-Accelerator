@@ -10,6 +10,7 @@ using Marketplace.SaaS.Accelerator.DataAccess.Services;
 using Marketplace.SaaS.Accelerator.Services.Configurations;
 using Marketplace.SaaS.Accelerator.Services.Contracts;
 using Marketplace.SaaS.Accelerator.Services.Services;
+using Marketplace.SaaS.Accelerator.Services.StatusHandlers;
 using Marketplace.SaaS.Accelerator.Services.Utilities;
 using Marketplace.SaaS.Accelerator.Services.WebHook;
 using Microsoft.AspNetCore.Authentication;
@@ -124,6 +125,7 @@ public class Startup
 
         services
             .AddDbContext<SaasKitContext>(options => options.UseSqlServer(this.Configuration.GetConnectionString("DefaultConnection")));
+        services.AddScoped<ISaasKitUnitOfWork>(sp => sp.GetRequiredService<SaasKitContext>());
 
         InitializeRepositoryServices(services);
 
@@ -181,5 +183,14 @@ public class Startup
         services.AddScoped<IEmailService, SMTPEmailService>();
         services.AddScoped<SaaSClientLogger<HomeController>>();
         services.AddScoped<IWebNotificationService, WebNotificationService>();
+        services.AddScoped<ApplicationConfigService>();
+        services.AddScoped<ApplicationLogService>();
+        services.AddScoped<UserService>();
+        services.AddScoped<SubscriptionService>();
+        services.AddScoped<PlanService>();
+        services.AddScoped<PendingActivationStatusHandler>();
+        services.AddScoped<PendingFulfillmentStatusHandler>();
+        services.AddScoped<NotificationStatusHandler>();
+        services.AddScoped<UnsubscribeStatusHandler>();
     }
 }

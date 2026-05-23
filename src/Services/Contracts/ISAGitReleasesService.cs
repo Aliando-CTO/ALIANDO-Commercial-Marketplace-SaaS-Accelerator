@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+using System.Threading.Tasks;
 
 namespace Marketplace.SaaS.Accelerator.Services.Services;
 
@@ -11,5 +11,5 @@ public interface ISAGitReleasesService
     /// Gets the latest release number.
     /// </summary>
     /// <returns> Release Version.</returns>
-    public string GetLatestReleaseFromGitHub();
+    Task<string> GetLatestReleaseFromGitHubAsync();
 }

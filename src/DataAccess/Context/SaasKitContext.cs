@@ -1,9 +1,10 @@
-﻿using Marketplace.SaaS.Accelerator.DataAccess.Entities;
+﻿using Marketplace.SaaS.Accelerator.DataAccess.Contracts;
+using Marketplace.SaaS.Accelerator.DataAccess.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Marketplace.SaaS.Accelerator.DataAccess.Context;
 
-public partial class SaasKitContext : DbContext
+public partial class SaasKitContext : DbContext, ISaasKitUnitOfWork
 {
     public SaasKitContext()
     {

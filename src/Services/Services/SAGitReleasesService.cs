@@ -1,7 +1,8 @@
-﻿using Microsoft.Extensions.Logging;
 using System;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace Marketplace.SaaS.Accelerator.Services.Services;
 
@@ -10,53 +11,45 @@ namespace Marketplace.SaaS.Accelerator.Services.Services;
 /// </summary>
 public class SAGitReleasesService : ISAGitReleasesService
 {
-    /// <summary>
-    /// The logger.
-    /// </summary>
+    private const string ReleasesUrl =
+        "https://api.github.com/repos/Azure/Commercial-Marketplace-SaaS-Accelerator/releases/latest";
+
+    private readonly IHttpClientFactory httpClientFactory;
     private readonly ILogger<SAGitReleasesService> logger;
 
-    /// <summary>
-    public SAGitReleasesService(ILogger<SAGitReleasesService> _logger)
+    public SAGitReleasesService(
+        IHttpClientFactory httpClientFactory,
+        ILogger<SAGitReleasesService> logger)
     {
-        logger = _logger;   
+        this.httpClientFactory = httpClientFactory;
+        this.logger = logger;
     }
 
     /// <summary>
     /// Gets the latest release number.
     /// </summary>
     /// <returns> Release Version.</returns>
-    public string GetLatestReleaseFromGitHub()
+    public async Task<string> GetLatestReleaseFromGitHubAsync()
     {
-        using (var httpClient = new HttpClient())
+        try
         {
-            try
-            {
-                // GitHub API requires a user agent
-                httpClient.DefaultRequestHeaders.UserAgent.TryParseAdd("request");
+            var client = this.httpClientFactory.CreateClient(nameof(SAGitReleasesService));
+            client.DefaultRequestHeaders.UserAgent.TryParseAdd("SaaSAccelerator");
 
-                var WebNotificationUrl = "https://api.github.com/repos/Azure/Commercial-Marketplace-SaaS-Accelerator/releases/latest";
-                // Send a GET request to the github api URL
-                var response = httpClient.GetAsync(WebNotificationUrl).GetAwaiter().GetResult();
-
-                if (response.IsSuccessStatusCode)
-                {
-                    var content = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                    var releaseInfo = JsonSerializer.Deserialize<JsonElement>(content);
-                    var tagName = releaseInfo.GetProperty("tag_name").GetString();
-                    return tagName ?? string.Empty;
-                }
-                else
-                {
-                    return string.Empty;
-                }
-            }
-            catch (Exception ex)
+            var response = await client.GetAsync(ReleasesUrl).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
             {
-                this.logger.LogError($"Unable to get latest SA release from Github:{ex.Message} :: {ex.InnerException}");
                 return string.Empty;
             }
+
+            var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            var releaseInfo = JsonSerializer.Deserialize<JsonElement>(content);
+            return releaseInfo.GetProperty("tag_name").GetString() ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            this.logger.LogError(ex, "Unable to get latest SA release from GitHub");
+            return string.Empty;
         }
     }
-
-
 }

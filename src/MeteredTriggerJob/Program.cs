@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Reflection;
+using System.Threading.Tasks;
 using Azure.Identity;
 using Marketplace.SaaS.Accelerator.DataAccess.Context;
 using Marketplace.SaaS.Accelerator.DataAccess.Contracts;
@@ -22,7 +23,7 @@ class Program
     /// Entery point to the scheduler engine
     /// </summary>
     /// <param name="args"></param>
-    static void Main (string[] args)
+    static async Task Main (string[] args)
     {
 
         Console.WriteLine($"MeteredExecutor Webjob Started at: {DateTime.Now}");
@@ -46,6 +47,7 @@ class Program
 
         var services = new ServiceCollection()
             .AddDbContext<SaasKitContext>(options => options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")), ServiceLifetime.Transient)
+            .AddTransient<ISaasKitUnitOfWork>(sp => sp.GetRequiredService<SaasKitContext>())
             .AddScoped<ISchedulerFrequencyRepository, SchedulerFrequencyRepository>()
             .AddScoped<IMeteredPlanSchedulerManagementRepository, MeteredPlanSchedulerManagementRepository>()
             .AddScoped<ISchedulerManagerViewRepository, SchedulerManagerViewRepository>()
@@ -59,9 +61,10 @@ class Program
             .AddSingleton<IAppVersionService>(versionInfo)
             .BuildServiceProvider();
 
-        services
+        await services
             .GetService<Executor>()
-            .Execute();
+            .ExecuteAsync()
+            .ConfigureAwait(false);
         Console.WriteLine($"MeteredExecutor Webjob Ended at: {DateTime.Now}");
 
     }

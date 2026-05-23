@@ -13,6 +13,7 @@ using Marketplace.SaaS.Accelerator.Services.Configurations;
 using Marketplace.SaaS.Accelerator.Services.Contracts;
 using Marketplace.SaaS.Accelerator.Services.Models;
 using Marketplace.SaaS.Accelerator.Services.Services;
+using Marketplace.SaaS.Accelerator.Services.StatusHandlers;
 using Marketplace.SaaS.Accelerator.Services.Utilities;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -144,11 +145,21 @@ public class Startup
         // Add the assembly version
         services.AddSingleton<IAppVersionService>(new AppVersionService(Assembly.GetExecutingAssembly()?.GetName()?.Version));
 
+        services.AddHttpClient();
+
         services
-            .AddScoped<ApplicationConfigService>();
+            .AddScoped<ApplicationConfigService>()
+            .AddScoped<UserService>()
+            .AddScoped<SubscriptionService>()
+            .AddScoped<ApplicationLogService>()
+            .AddScoped<PendingActivationStatusHandler>()
+            .AddScoped<PendingFulfillmentStatusHandler>()
+            .AddScoped<NotificationStatusHandler>()
+            .AddScoped<UnsubscribeStatusHandler>();
 
         services
             .AddDbContext<SaasKitContext>(options => options.UseSqlServer(this.Configuration.GetConnectionString("DefaultConnection")));
+        services.AddScoped<ISaasKitUnitOfWork>(sp => sp.GetRequiredService<SaasKitContext>());
 
 
         InitializeRepositoryServices(services);

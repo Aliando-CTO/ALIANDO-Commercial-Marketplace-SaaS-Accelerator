@@ -48,18 +48,15 @@ public class SubscriptionsRepository : ISubscriptionsRepository
             existingSubscriptions.Ampquantity = subscriptionDetails.Ampquantity;
             existingSubscriptions.AmpOfferId = subscriptionDetails.AmpOfferId;
             existingSubscriptions.Term = subscriptionDetails.Term;
-            existingSubscriptions.StartDate = subscriptionDetails.StartDate; 
+            existingSubscriptions.StartDate = subscriptionDetails.StartDate;
             existingSubscriptions.EndDate = subscriptionDetails.EndDate;
 
             this.context.Subscriptions.Update(existingSubscriptions);
             this.context.SaveChanges();
             return existingSubscriptions.Id;
         }
-        else
-        {
-            this.context.Subscriptions.Add(subscriptionDetails);
-        }
 
+        this.context.Subscriptions.Add(subscriptionDetails);
         this.context.SaveChanges();
         return subscriptionDetails.Id;
     }
