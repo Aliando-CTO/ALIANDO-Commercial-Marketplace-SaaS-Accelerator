@@ -236,7 +236,9 @@ public class Executor
                 LogLine($"Scheduled Item Id: {item.Id} Error during EmitUsageEventAsync {responseJson}", true);
             }
 
-            UpdateSchedulerItem(item,requestJson, responseJson,meteringUsageResult.Status);
+            // UsageEventId is Guid.Empty on failure paths; pass null so the indexed column stays sparse.
+            Guid? marketplaceEventId = meteringUsageResult.UsageEventId == Guid.Empty ? (Guid?)null : meteringUsageResult.UsageEventId;
+            UpdateSchedulerItem(item, requestJson, responseJson, meteringUsageResult.Status, marketplaceEventId);
         }
         catch (Exception ex)
         {
@@ -251,7 +253,7 @@ public class Executor
     /// <param name="requestJson">usage post payload</param>
     /// <param name="responseJson">API respond</param>
     /// <param name="status">status code</param>
-    private void UpdateSchedulerItem(SchedulerManagerViewModel item,string requestJson,string responseJson,string status)
+    private void UpdateSchedulerItem(SchedulerManagerViewModel item, string requestJson, string responseJson, string status, Guid? marketplaceUsageEventId)
     {
         try
         {
@@ -267,6 +269,14 @@ public class Executor
                 SubscriptionUsageDate = DateTime.UtcNow,
                 CreatedBy = 0,
                 CreatedDate = DateTime.Now,
+
+                // Denormalised reporting columns. Scheduler-driven rows use the scheduler item's
+                // identifier as ExternalRequestId so the activity view can correlate audits with
+                // the originating MeteredPlanSchedulerManagement row.
+                ExternalRequestId = $"Scheduler-{item.Id}",
+                Dimension = item.Dimension,
+                Quantity = item.Quantity,
+                MarketplaceUsageEventId = marketplaceUsageEventId,
             };
             subscriptionUsageLogsRepository.Save(newMeteredAuditLog);
 

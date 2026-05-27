@@ -14,5 +14,13 @@ public partial class MeteredAuditLogs
     public int CreatedBy { get; set; }
     public DateTime? SubscriptionUsageDate { get; set; }
 
+    // Reporting columns: populated on insert by writers (MeteringSubmissionService, MeteredTriggerHelper)
+    // so billing exports and caller-correlation queries can run against indexed columns instead of
+    // scanning the JSON blobs.
+    public string ExternalRequestId { get; set; }
+    public string Dimension { get; set; }
+    public double? Quantity { get; set; }
+    public Guid? MarketplaceUsageEventId { get; set; }
+
     public virtual Subscriptions Subscription { get; set; }
 }

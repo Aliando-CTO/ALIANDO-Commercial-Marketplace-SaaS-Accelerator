@@ -152,6 +152,9 @@ public class Startup
             .AddScoped<UserService>()
             .AddScoped<SubscriptionService>()
             .AddScoped<ApplicationLogService>()
+            .AddScoped<IMeteringSubmissionService, MeteringSubmissionService>()
+            .AddScoped<SaaSClientLogger<MeteringSubmissionService>>()
+            .AddSingleton<ValidateJwtToken>()
             .AddScoped<PendingActivationStatusHandler>()
             .AddScoped<PendingFulfillmentStatusHandler>()
             .AddScoped<NotificationStatusHandler>()
@@ -250,5 +253,6 @@ public class Startup
         services.AddScoped<SaaSClientLogger<ApplicationLogController>>();
         services.AddScoped<SaaSClientLogger<ApplicationConfigController>>();
         services.AddScoped<SaaSClientLogger<SchedulerController>>();
+        services.AddScoped<SaaSClientLogger<MeteringActivityController>>();
     }
 }

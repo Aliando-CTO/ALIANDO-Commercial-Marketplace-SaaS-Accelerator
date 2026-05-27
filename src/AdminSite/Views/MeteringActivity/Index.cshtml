@@ -1,0 +1,173 @@
+@model Marketplace.SaaS.Accelerator.Services.Models.MeteringActivityViewModel
+@{
+    ViewData["Title"] = "Metering Activity";
+}
+
+<div class="container-fluid">
+    <div class="card-body">
+        <div class="text-left">
+            <span class="cm-section-heading">Metering Activity</span>
+        </div>
+        <p class="text-muted small mb-3">
+            Audit of every metering submission across all channels &mdash; Manual UI, Scheduler, and External API.
+            Showing @Model.Results.Count of @Model.TotalCount matching row(s).
+        </p>
+
+        <form asp-action="Index" asp-controller="MeteringActivity" method="get" class="mb-3">
+            <div class="row g-2">
+                <div class="col-md-2">
+                    <label asp-for="Channel" class="form-label fw-bold">Channel</label>
+                    <select asp-for="Channel" class="form-control"
+                            asp-items="@(new Microsoft.AspNetCore.Mvc.Rendering.SelectList(Marketplace.SaaS.Accelerator.Services.Models.MeteringActivityViewModel.KnownChannels))">
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="SourceContains" class="form-label fw-bold">Source contains</label>
+                    <input asp-for="SourceContains" class="form-control" placeholder="e.g. BillingService-Prod" />
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="StatusCode" class="form-label fw-bold">Status</label>
+                    <select asp-for="StatusCode" class="form-control"
+                            asp-items="@(new Microsoft.AspNetCore.Mvc.Rendering.SelectList(Marketplace.SaaS.Accelerator.Services.Models.MeteringActivityViewModel.CommonStatusCodes))">
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="ExternalRequestId" class="form-label fw-bold">External Request Id</label>
+                    <input asp-for="ExternalRequestId" class="form-control" placeholder="caller trace id" />
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="PageSize" class="form-label fw-bold">Page size</label>
+                    <input asp-for="PageSize" type="number" min="10" max="200" class="form-control" />
+                </div>
+            </div>
+            <div class="row g-2 mt-2">
+                <div class="col-md-2">
+                    <label asp-for="From" class="form-label fw-bold">From (UTC)</label>
+                    <input asp-for="From" type="datetime-local" class="form-control" />
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="To" class="form-label fw-bold">To (UTC)</label>
+                    <input asp-for="To" type="datetime-local" class="form-control" />
+                </div>
+                <div class="col-md-auto align-self-end">
+                    <button type="submit" class="cm-button-default">Apply filters</button>
+                    <a asp-action="Index" asp-controller="MeteringActivity" class="btn btn-link">Reset</a>
+                </div>
+            </div>
+        </form>
+
+        <form asp-action="ExportCsv" asp-controller="MeteringActivity" method="get" class="mb-3">
+            @* Pass current filters through to the export so the download matches what's on screen. *@
+            <input type="hidden" name="Channel" value="@Model.Channel" />
+            <input type="hidden" name="SourceContains" value="@Model.SourceContains" />
+            <input type="hidden" name="StatusCode" value="@Model.StatusCode" />
+            <input type="hidden" name="ExternalRequestId" value="@Model.ExternalRequestId" />
+            <input type="hidden" name="From" value="@Model.From?.ToString("yyyy-MM-ddTHH:mm:ss")" />
+            <input type="hidden" name="To" value="@Model.To?.ToString("yyyy-MM-ddTHH:mm:ss")" />
+            <div class="row g-2">
+                <div class="col-md-auto">
+                    <button type="submit" class="cm-button-default" title="Download Accepted-only rows matching the current filters">
+                        Export CSV (Accepted only)
+                    </button>
+                </div>
+                <div class="col-md-auto align-self-center">
+                    <label class="form-check-label small">
+                        <input type="checkbox" class="form-check-input" name="includeRejected" value="true" />
+                        Include rejected rows (investigation mode)
+                    </label>
+                </div>
+                <div class="col-md-auto align-self-center text-muted small">
+                    Capped at 100,000 rows per download.
+                </div>
+            </div>
+        </form>
+
+        <div class="form-group" style="overflow:auto">
+            @if (Model.Results.Count == 0)
+            {
+                <div class="alert alert-secondary">No matching rows.</div>
+            }
+            else
+            {
+                <table id="meteringActivityTable" class="table table-striped table-bordered dt-responsive" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th style="width: 14%">Created (server)</th>
+                            <th style="width: 14%">Usage Date (UTC)</th>
+                            <th style="width: 12%">Status</th>
+                            <th style="width: 16%">RunBy</th>
+                            <th>Subscription</th>
+                            <th style="width: 30%">Request / Response</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in Model.Results)
+                        {
+                            <tr>
+                                <td>@(row.CreatedDate?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</td>
+                                <td>@(row.SubscriptionUsageDate?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</td>
+                                <td>
+                                    @if (row.StatusCode == "Accepted")
+                                    {
+                                        <span class="badge bg-success">@row.StatusCode</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning text-dark">@(string.IsNullOrEmpty(row.StatusCode) ? "-" : row.StatusCode)</span>
+                                    }
+                                </td>
+                                <td>@row.RunBy</td>
+                                <td>
+                                    @if (row.Subscription != null)
+                                    {
+                                        <div><strong>@row.Subscription.Name</strong></div>
+                                        <div class="small text-muted">@row.Subscription.AmpsubscriptionId</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">(no linked subscription)</span>
+                                    }
+                                </td>
+                                <td>
+                                    <details>
+                                        <summary>JSON</summary>
+                                        <div class="small">
+                                            <div class="mt-1"><strong>Request</strong></div>
+                                            <pre style="white-space: pre-wrap; max-height: 200px; overflow:auto;">@row.RequestJson</pre>
+                                            <div class="mt-1"><strong>Response</strong></div>
+                                            <pre style="white-space: pre-wrap; max-height: 200px; overflow:auto;">@row.ResponseJson</pre>
+                                        </div>
+                                    </details>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                @if (Model.TotalPages > 1)
+                {
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination">
+                            @for (var p = 1; p <= Model.TotalPages; p++)
+                            {
+                                var routeValues = new {
+                                    Channel = Model.Channel,
+                                    SourceContains = Model.SourceContains,
+                                    StatusCode = Model.StatusCode,
+                                    ExternalRequestId = Model.ExternalRequestId,
+                                    From = Model.From,
+                                    To = Model.To,
+                                    PageSize = Model.PageSize,
+                                    Page = p,
+                                };
+                                <li class="page-item @(p == Model.Page ? "active" : string.Empty)">
+                                    <a class="page-link" asp-action="Index" asp-route-channel="@Model.Channel" asp-route-sourcecontains="@Model.SourceContains" asp-route-statuscode="@Model.StatusCode" asp-route-externalrequestid="@Model.ExternalRequestId" asp-route-from="@Model.From" asp-route-to="@Model.To" asp-route-pagesize="@Model.PageSize" asp-route-page="@p">@p</a>
+                                </li>
+                            }
+                        </ul>
+                    </nav>
+                }
+            }
+        </div>
+    </div>
+</div>

@@ -211,15 +211,29 @@ namespace Marketplace.SaaS.Accelerator.DataAccess.Migrations
                     b.Property<DateTime?>("CreatedDate")
                         .HasColumnType("datetime");
 
-                    b.Property<string>("RequestJson")
-                        .HasMaxLength(500)
+                    b.Property<string>("Dimension")
+                        .HasMaxLength(150)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(500)");
+                        .HasColumnType("varchar(150)");
+
+                    b.Property<string>("ExternalRequestId")
+                        .HasMaxLength(200)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(200)");
+
+                    b.Property<Guid?>("MarketplaceUsageEventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double?>("Quantity")
+                        .HasColumnType("float");
+
+                    b.Property<string>("RequestJson")
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(max)");
 
                     b.Property<string>("ResponseJson")
-                        .HasMaxLength(500)
                         .IsUnicode(false)
-                        .HasColumnType("varchar(500)");
+                        .HasColumnType("varchar(max)");
 
                     b.Property<string>("RunBy")
                         .HasMaxLength(255)
@@ -239,7 +253,22 @@ namespace Marketplace.SaaS.Accelerator.DataAccess.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CreatedDate")
+                        .HasDatabaseName("IX_MeteredAuditLogs_CreatedDate");
+
+                    b.HasIndex("ExternalRequestId")
+                        .HasDatabaseName("IX_MeteredAuditLogs_ExternalRequestId");
+
+                    b.HasIndex("MarketplaceUsageEventId")
+                        .HasDatabaseName("IX_MeteredAuditLogs_MarketplaceUsageEventId");
+
                     b.HasIndex("SubscriptionId");
+
+                    b.HasIndex("RunBy", "CreatedDate")
+                        .HasDatabaseName("IX_MeteredAuditLogs_RunBy_CreatedDate");
+
+                    b.HasIndex("StatusCode", "CreatedDate")
+                        .HasDatabaseName("IX_MeteredAuditLogs_StatusCode_CreatedDate");
 
                     b.ToTable("MeteredAuditLogs");
                 });

@@ -100,6 +100,8 @@ public class HomeController : BaseController
 
     private readonly ISaasKitUnitOfWork unitOfWork;
 
+    private readonly IMeteringSubmissionService meteringSubmissionService;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="HomeController" /> class.
     /// </summary>
@@ -148,6 +150,7 @@ public class HomeController : BaseController
         NotificationStatusHandler notificationStatusHandlers,
         UnsubscribeStatusHandler unsubscribeStatusHandlers,
         ISaasKitUnitOfWork unitOfWork,
+        IMeteringSubmissionService meteringSubmissionService,
         SaaSClientLogger<HomeController> logger) : base(applicationConfigRepository, appVersionService)
     {
         this.billingApiService = billingApiService;
@@ -173,6 +176,7 @@ public class HomeController : BaseController
         this.notificationStatusHandlers = notificationStatusHandlers;
         this.unsubscribeStatusHandlers = unsubscribeStatusHandlers;
         this.unitOfWork = unitOfWork;
+        this.meteringSubmissionService = meteringSubmissionService;
     }
 
     /// <summary>
@@ -570,46 +574,20 @@ public class HomeController : BaseController
         this.logger.Info(HttpUtility.HtmlEncode($"Home Controller / ManageSubscriptionUsage  subscriptionData: {JsonSerializer.Serialize(subscriptionData)}"));
         try
         {
-            if (subscriptionData != null && subscriptionData.SubscriptionDetail != null)
+            if (subscriptionData?.SubscriptionDetail != null)
             {
-                var currentUserDetail = this.userRepository.GetPartnerDetailFromEmail(this.CurrentUserEmailAddress);
-                var subscriptionUsageRequest = new MeteringUsageRequest()
+                var submission = new MeteringSubmission
                 {
+                    SubscriptionId = subscriptionData.SubscriptionDetail.AmpsubscriptionId,
                     Dimension = subscriptionData.SelectedDimension,
-                    EffectiveStartTime = DateTime.UtcNow,
-                    PlanId = subscriptionData.SubscriptionDetail.AmpplanId,
                     Quantity = Convert.ToDouble(subscriptionData.Quantity ?? "0"),
-                    ResourceId = subscriptionData.SubscriptionDetail.AmpsubscriptionId,
+                    EffectiveStartTime = DateTime.UtcNow,
+                    Source = "Manual",
+                    ExternalRequestId = $"AdminUI-{Guid.NewGuid():N}",
                 };
-                var meteringUsageResult = new MeteringUsageResult();
-                var requestJson = JsonSerializer.Serialize(subscriptionUsageRequest);
-                var responseJson = string.Empty;
-                try
-                {
-                    this.logger.Info("EmitUsageEventAsync");
-                    meteringUsageResult = await this.billingApiService.EmitUsageEventAsync(subscriptionUsageRequest).ConfigureAwait(false);
-                    responseJson = JsonSerializer.Serialize(meteringUsageResult);
-                    this.logger.Info(responseJson);
-                }
-                catch (MarketplaceException mex)
-                {
-                    responseJson = JsonSerializer.Serialize(mex.MeteredBillingErrorDetail);
-                    meteringUsageResult.Status = mex.ErrorCode;
-                    this.logger.Info(responseJson);
-                }
 
-                var newMeteredAuditLog = new MeteredAuditLogs()
-                {
-                    RequestJson = requestJson,
-                    ResponseJson = responseJson,
-                    StatusCode = meteringUsageResult.Status,
-                    RunBy = "Manual",
-                    SubscriptionId = subscriptionData.SubscriptionDetail.Id,
-                    SubscriptionUsageDate = DateTime.UtcNow,
-                    CreatedBy = currentUserDetail == null ? 0 : currentUserDetail.UserId,
-                    CreatedDate = DateTime.Now,
-                };
-                this.subscriptionUsageLogsRepository.Save(newMeteredAuditLog);
+                var result = await this.meteringSubmissionService.SubmitUsageAsync(submission).ConfigureAwait(false);
+                this.logger.Info($"ManageSubscriptionUsage result: {JsonSerializer.Serialize(result)}");
             }
         }
         catch (Exception ex)

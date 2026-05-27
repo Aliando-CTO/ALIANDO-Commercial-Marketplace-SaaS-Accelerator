@@ -155,12 +155,14 @@ public partial class SaasKitContext : DbContext, ISaasKitUnitOfWork
         {
             entity.Property(e => e.CreatedDate).HasColumnType("datetime");
 
+            // Grown from varchar(500) to varchar(max). The wrapped JSON we now write
+            // (caller correlation + original request) blew past 500 chars routinely.
             entity.Property(e => e.RequestJson)
-                .HasMaxLength(500)
+                .HasColumnType("varchar(max)")
                 .IsUnicode(false);
 
             entity.Property(e => e.ResponseJson)
-                .HasMaxLength(500)
+                .HasColumnType("varchar(max)")
                 .IsUnicode(false);
 
             entity.Property(e => e.RunBy)
@@ -173,10 +175,43 @@ public partial class SaasKitContext : DbContext, ISaasKitUnitOfWork
 
             entity.Property(e => e.SubscriptionUsageDate).HasColumnType("datetime");
 
+            entity.Property(e => e.ExternalRequestId)
+                .HasMaxLength(200)
+                .IsUnicode(false);
+
+            entity.Property(e => e.Dimension)
+                .HasMaxLength(150)
+                .IsUnicode(false);
+
+            entity.Property(e => e.Quantity).HasColumnType("float");
+
+            entity.Property(e => e.MarketplaceUsageEventId).HasColumnType("uniqueidentifier");
+
             entity.HasOne(d => d.Subscription)
                 .WithMany(p => p.MeteredAuditLogs)
                 .HasForeignKey(d => d.SubscriptionId)
                 .HasConstraintName("FK__MeteredAu__Subsc__628FA481");
+
+            // Indexes optimised for the activity-page + reporting queries:
+            //   - ExternalRequestId        : caller correlation lookup (single-row by trace id)
+            //   - CreatedDate              : date-range scans, default sort
+            //   - RunBy, CreatedDate       : channel + date filter (most common combo)
+            //   - StatusCode, CreatedDate  : status + date filter (e.g. "all Accepted last month")
+            //   - MarketplaceUsageEventId  : Microsoft event-id lookup
+            entity.HasIndex(e => e.ExternalRequestId)
+                .HasDatabaseName("IX_MeteredAuditLogs_ExternalRequestId");
+
+            entity.HasIndex(e => e.CreatedDate)
+                .HasDatabaseName("IX_MeteredAuditLogs_CreatedDate");
+
+            entity.HasIndex(e => new { e.RunBy, e.CreatedDate })
+                .HasDatabaseName("IX_MeteredAuditLogs_RunBy_CreatedDate");
+
+            entity.HasIndex(e => new { e.StatusCode, e.CreatedDate })
+                .HasDatabaseName("IX_MeteredAuditLogs_StatusCode_CreatedDate");
+
+            entity.HasIndex(e => e.MarketplaceUsageEventId)
+                .HasDatabaseName("IX_MeteredAuditLogs_MarketplaceUsageEventId");
         });
 
         modelBuilder.Entity<MeteredDimensions>(entity =>

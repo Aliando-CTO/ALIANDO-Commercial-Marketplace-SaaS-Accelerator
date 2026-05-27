@@ -131,6 +131,62 @@ public class SubscriptionUsageLogsRepository : ISubscriptionUsageLogsRepository
     }
 
 
+    /// <inheritdoc />
+    public List<MeteredAuditLogs> QueryMeteredAuditLogs(
+        string runByPrefix,
+        string runByContains,
+        string statusCode,
+        string externalRequestIdContains,
+        DateTime? from,
+        DateTime? to,
+        int skip,
+        int take,
+        out int totalCount)
+    {
+        IQueryable<MeteredAuditLogs> query = this.context.MeteredAuditLogs.Include(s => s.Subscription);
+
+        if (!string.IsNullOrWhiteSpace(runByPrefix))
+        {
+            query = query.Where(r => r.RunBy != null && r.RunBy.StartsWith(runByPrefix));
+        }
+
+        if (!string.IsNullOrWhiteSpace(runByContains))
+        {
+            query = query.Where(r => r.RunBy != null && r.RunBy.Contains(runByContains));
+        }
+
+        if (!string.IsNullOrWhiteSpace(statusCode))
+        {
+            query = query.Where(r => r.StatusCode == statusCode);
+        }
+
+        if (!string.IsNullOrWhiteSpace(externalRequestIdContains))
+        {
+            // Uses indexed ExternalRequestId column for fast lookup. Falls back to RequestJson
+            // scan only for pre-migration rows where the new column is null.
+            query = query.Where(r =>
+                (r.ExternalRequestId != null && r.ExternalRequestId.Contains(externalRequestIdContains))
+                || (r.ExternalRequestId == null && r.RequestJson != null && r.RequestJson.Contains(externalRequestIdContains)));
+        }
+
+        if (from.HasValue)
+        {
+            query = query.Where(r => r.CreatedDate >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(r => r.CreatedDate <= to.Value);
+        }
+
+        totalCount = query.Count();
+        return query
+            .OrderByDescending(r => r.CreatedDate)
+            .Skip(skip < 0 ? 0 : skip)
+            .Take(take <= 0 ? 50 : take)
+            .ToList();
+    }
+
     /// <summary>
     /// Removes the specified metered audit logs.
     /// </summary>
